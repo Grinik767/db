@@ -8,9 +8,9 @@ namespace Game.Domain
         private readonly IMongoCollection<UserEntity> userCollection;
         public const string CollectionName = "users";
 
-        public MongoUserRepository(IMongoDatabase database)
+        public MongoUserRepository(IMongoDatabase db)
         {
-            userCollection = database.GetCollection<UserEntity>(CollectionName);
+            userCollection = db.GetCollection<UserEntity>(CollectionName);
             
             var indexKeysDefinition = Builders<UserEntity>.IndexKeys.Ascending(u => u.Login);
             var createIndexOptions = new CreateIndexOptions { Unique = true };
@@ -31,7 +31,6 @@ namespace Game.Domain
 
         public UserEntity GetOrCreateByLogin(string login)
         {
-            var filter = Builders<UserEntity>.Filter.Eq(u => u.Login, login);
             var update = Builders<UserEntity>.Update
                 .SetOnInsert(u => u.Id, Guid.NewGuid())
                 .SetOnInsert(u => u.Login, login)
@@ -47,7 +46,7 @@ namespace Game.Domain
             };
 
             return userCollection.FindOneAndUpdate(
-                filter,
+                Builders<UserEntity>.Filter.Eq(u => u.Login, login),
                 update,
                 options
             );
