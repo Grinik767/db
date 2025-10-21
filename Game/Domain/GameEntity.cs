@@ -16,12 +16,12 @@ namespace Game.Domain
         }
         
         [BsonConstructor]
-        public GameEntity(Guid id, GameStatus status, int turnsCount, int currentTurnIndex, List<Player> players)
+        public GameEntity(Guid id, GameStatus status, int turnsCount, int currentTurnNumber, List<Player> players)
         {
             Id = id;
             Status = status;
             TurnsCount = turnsCount;
-            CurrentTurnIndex = currentTurnIndex;
+            CurrentTurnNumber = currentTurnNumber;
             this.players = players;
         }
 
@@ -38,7 +38,7 @@ namespace Game.Domain
         [BsonElement]
         public int TurnsCount { get; }
 
-        public int CurrentTurnIndex { get; private set; }
+        public int CurrentTurnNumber { get; private set; }
 
         public GameStatus Status { get; private set; }
 
@@ -53,7 +53,7 @@ namespace Game.Domain
 
         public bool IsFinished()
         {
-            return CurrentTurnIndex >= TurnsCount
+            return CurrentTurnNumber >= TurnsCount
                    || Status == GameStatus.Finished
                    || Status == GameStatus.Canceled;
         }
@@ -80,28 +80,62 @@ namespace Game.Domain
 
         public GameTurnEntity FinishTurn()
         {
-            var winnerId = Guid.Empty;
-            for (int i = 0; i < 2; i++)
+            if (Players.Count < 2 || !Players[0].Decision.HasValue || !Players[1].Decision.HasValue)
+                throw new InvalidOperationException("Both players must have a decision to finish the turn.");
+
+            Guid? turnWinnerId = null;
+            
+            var player1 = Players[0];
+            var player2 = Players[1];
+
+            var player1Decision = player1.Decision.Value;
+            var player2Decision = player2.Decision.Value;
+
+            if (player1Decision.Beats(player2Decision))
             {
-                var player = Players[i];
-                var opponent = Players[1 - i];
-                if (!player.Decision.HasValue || !opponent.Decision.HasValue)
-                    throw new InvalidOperationException();
-                if (player.Decision.Value.Beats(opponent.Decision.Value))
-                {
-                    player.Score++;
-                    winnerId = player.UserId;
-                }
+                player1.Score++;
+                turnWinnerId = player1.UserId;
             }
-            //TODO Заполнить все внутри GameTurnEntity, в том числе winnerId
-            var result = new GameTurnEntity();
-            // Это должно быть после создания GameTurnEntity
+            else if (player2Decision.Beats(player1Decision))
+            {
+                player2.Score++;
+                turnWinnerId = player2.UserId;
+            }
+
+            var playerTurnResults = new List<PlayerTurnResult>();
+
+            var player1Result = new PlayerTurnResult
+            {
+                UserId = player1.UserId,
+                Name = player1.Name,
+                Decision = player1Decision,
+                Result = turnWinnerId == null ? TurnResult.Draw : turnWinnerId == player1.UserId ? TurnResult.Won : TurnResult.Lost
+            };
+            playerTurnResults.Add(player1Result);
+
+            var player2Result = new PlayerTurnResult
+            {
+                UserId = player2.UserId,
+                Name = player2.Name,
+                Decision = player2Decision,
+                Result = turnWinnerId == null ? TurnResult.Draw : turnWinnerId == player2.UserId ? TurnResult.Won : TurnResult.Lost
+            };
+            playerTurnResults.Add(player2Result);
+
+
+            var gameTurnEntity = new GameTurnEntity(Id, CurrentTurnNumber + 1);
+            gameTurnEntity.Players.AddRange(playerTurnResults);
+            gameTurnEntity.WinnerId = turnWinnerId;
+            
             foreach (var player in Players)
                 player.Decision = null;
-            CurrentTurnIndex++;
-            if (CurrentTurnIndex == TurnsCount)
+            
+            CurrentTurnNumber++;
+            
+            if (CurrentTurnNumber >= TurnsCount)
                 Status = GameStatus.Finished;
-            return result;
+            
+            return gameTurnEntity;
         }
     }
 }

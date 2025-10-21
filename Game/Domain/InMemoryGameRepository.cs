@@ -54,7 +54,7 @@ namespace Game.Domain
 
         private GameEntity Clone(Guid id, GameEntity game)
         {
-            return new GameEntity(id, game.Status, game.TurnsCount, game.CurrentTurnIndex, game.Players.ToList());
+            return new GameEntity(id, game.Status, game.TurnsCount, game.CurrentTurnNumber, game.Players.ToList());
         }
     }
 }
